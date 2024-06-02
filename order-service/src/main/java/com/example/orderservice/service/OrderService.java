@@ -3,6 +3,7 @@ package com.example.orderservice.service;
 import com.example.orderservice.dto.InventoryResponse;
 import com.example.orderservice.dto.OrderLineItemsDto;
 import com.example.orderservice.dto.OrderRequest;
+import com.example.orderservice.dto.OrderResponse;
 import com.example.orderservice.model.Order;
 import com.example.orderservice.model.OrderLineItems;
 import com.example.orderservice.repository.OrderRepository;
@@ -29,7 +30,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final WebClient.Builder webClientbuilder;
-    public void placeOrder(OrderRequest orderRequest){
+    public String placeOrder(OrderRequest orderRequest){
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
 
@@ -52,10 +53,20 @@ public class OrderService {
         boolean allProductsInStock = Arrays.stream(inventoryResponseArray).allMatch(InventoryResponse::isInStock);
         if (allProductsInStock){
             orderRepository.save(order);
+            return "Order placed successfully";
         }else {
             throw new IllegalArgumentException("Product is not in stock");
         }
+    }
 
+    public List<OrderResponse> getAllOrders() {
+        return orderRepository.findAll().stream().map(order ->
+            OrderResponse.builder()
+                    .id(order.getId())
+                    .orderNumber(order.getOrderNumber())
+                    .orderLineItemsList(order.getOrderLineItemsList())
+                    .build()
+        ).toList();
     }
 
     private OrderLineItems mapToDto(OrderLineItemsDto orderLineItemsDto) {
@@ -65,4 +76,6 @@ public class OrderService {
         orderLineItems.setSkuCode(orderLineItemsDto.getSkuCode());
         return orderLineItems;
     }
+
+
 }
