@@ -1,5 +1,7 @@
 package com.example.orderservice.service;
 
+import brave.Span;
+import brave.Tracer;
 import com.example.orderservice.dto.InventoryResponse;
 import com.example.orderservice.dto.OrderLineItemsDto;
 import com.example.orderservice.dto.OrderRequest;
@@ -7,6 +9,8 @@ import com.example.orderservice.dto.OrderResponse;
 import com.example.orderservice.model.Order;
 import com.example.orderservice.model.OrderLineItems;
 import com.example.orderservice.repository.OrderRepository;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -30,6 +34,7 @@ public class OrderService {
 
     private final OrderRepository orderRepository;
     private final WebClient.Builder webClientbuilder;
+    private final ObservationRegistry observationRegistry;
     public String placeOrder(OrderRequest orderRequest){
         Order order = new Order();
         order.setOrderNumber(UUID.randomUUID().toString());
@@ -43,7 +48,13 @@ public class OrderService {
         List<String> skuCodes = order.getOrderLineItemsList().stream()
                 .map(OrderLineItems::getSkuCode)
                 .toList();
+
         //Вызов Инвенторя
+        Observation inventoryServiceObservation = Observation.createNotStarted("inventory-service-lookup",
+                this.observationRegistry);
+        inventoryServiceObservation.lowCardinalityKeyValue("call", "inventory-service");
+
+        return inventoryServiceObservation.observe(() ->{
         InventoryResponse[] inventoryResponseArray = webClientbuilder.build().get()
                 .uri("http://inventory-service/api/inventory",
                         uriBuilder -> uriBuilder.queryParam("skuCode",skuCodes).build())
@@ -57,6 +68,7 @@ public class OrderService {
         }else {
             throw new IllegalArgumentException("Product is not in stock");
         }
+    });
     }
 
     public List<OrderResponse> getAllOrders() {
